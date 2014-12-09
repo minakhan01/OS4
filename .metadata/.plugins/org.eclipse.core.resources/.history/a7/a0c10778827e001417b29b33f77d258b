@@ -1,0 +1,14 @@
+
+public class Inode_main {
+
+	public static void main(String[] args) {
+		if (args.length==2){
+			
+		}
+		else{
+			System.out.println("Need two input files from the command line: input_file, file_access_trace.");
+		}
+
+	}
+
+}

@@ -1,0 +1,259 @@
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.PrintWriter;
+import java.util.ArrayList;
+import java.util.Scanner;
+
+
+public class Inode_main {
+
+	public static void main(String[] args) {
+		if (args.length==2){
+			File input_file = new File(args[0]);
+			File file_access_trace = new File(args[1]);
+			processFiles(input_file, file_access_trace);
+		}
+		else{
+			System.out.println("Need two input files from the command line: input_file, file_access_trace.");
+			System.exit(0);
+		}
+
+	}
+	
+	private static void processFiles(File input_file, File file_access_trace){
+		System.out.println("processing files");
+		try{
+			Scanner input_scanner=new Scanner(input_file);
+			readInputScanner(input_scanner);
+			input_scanner.close();
+				try{
+					Scanner file_trace_scanner=new Scanner(file_access_trace);
+					readAccessScanner(file_trace_scanner);
+					file_trace_scanner.close();
+					}
+					catch(FileNotFoundException file_excep){
+						System.out.println("File access trace not found");
+					}
+				}
+			catch(FileNotFoundException file_excep){
+				System.out.println("Input file not found");
+			}
+	}
+	
+	private static void readInputScanner(Scanner input_scanner){
+		ArrayList<String> text_file_names=new ArrayList<String>();
+		int inode_point_num=0;
+		String single_indirect_filename="single_indirect_block";
+		String double__indirect_filename="double_indirect_block";
+		// first line only has header
+		if (input_scanner.hasNextLine())
+			input_scanner.nextLine();
+		while(input_scanner.hasNextLine()){
+			inode_point_num++;
+			if (inode_point_num==13){
+				createSingleIndirectBlock(single_indirect_filename, input_scanner);
+				text_file_names.add(single_indirect_filename+".txt");
+			}
+			else if(inode_point_num==14){
+				createDoubleIndirectBlock(double__indirect_filename, input_scanner);
+				text_file_names.add(double__indirect_filename+".txt");
+			}
+			else if (inode_point_num<13){
+				String line=input_scanner.nextLine();
+				String[] words=line.split(",");
+				int block_num=Integer.parseInt(words[0]);
+				String data=words[1];
+				System.out.println("CREATING block_num: "+block_num+" data: "+data);
+				String file_name=String.valueOf(block_num)+".txt";
+				text_file_names.add(file_name);
+				createBlock(file_name, data);
+			}
+		}
+		addSuperBlock(text_file_names.toArray(new String[text_file_names.size()]));
+	}
+	
+	private static void createDoubleIndirectBlock(
+			String double_indirect_filename, Scanner input_scanner) {
+		String double_first_file="double_indirect_first";
+		String double_second_file="double_indirect_second";
+		createSingleIndirectBlock(double_first_file, input_scanner);
+		createSingleIndirectBlock(double_second_file, input_scanner);
+		createBlock(double_indirect_filename+".txt", "double_indirect_first.txt"+"\n"+"double_indirect_second.txt");
+	}
+
+	private static void createSingleIndirectBlock(
+			String single_indirect_filename, Scanner input_scanner) {
+		ArrayList<String> text_file_names=new ArrayList<String>();
+		int num_entries=0;
+		while(num_entries<100 && input_scanner.hasNextLine()){
+			String line=input_scanner.nextLine();
+			String[] words=line.split(",");
+			int block_num=Integer.parseInt(words[0]);
+			String data=words[1];
+			System.out.println("CREATING block_num: "+block_num+" data: "+data);
+			String file_name=String.valueOf(block_num)+".txt";
+			text_file_names.add(file_name);
+			createBlock(file_name+".txt", data);
+			num_entries++;
+		}
+		String data="";
+		String[] text_files=text_file_names.toArray(new String[text_file_names.size()]);
+		for (int i=0;i<text_files.length;i++){
+			data+=text_files[i];
+			if (i!= text_files.length-1){
+				data+="\n";
+			}
+		}
+		createBlock(single_indirect_filename, data);
+		System.out.println("ADDED single indirect file");
+	}
+
+	private static void addSuperBlock(String[] text_file_names){
+		String data="";
+		for (int i=0;i<text_file_names.length;i++){
+			data+=text_file_names[i];
+			if (i!= text_file_names.length-1){
+				data+="\n";
+			}
+		}
+		createBlock("test_file.txt", data);
+		System.out.println("ADDED superblock with data: "+data);
+	}
+	
+	private static void createBlock(String file_name, String data){
+		PrintWriter writer;
+		try {
+			writer = new PrintWriter("input_file/"+file_name);
+			writer.println(data);
+			writer.close();
+			System.out.println("ADDED filename: "+file_name+ "with data: "+data);
+		} catch (FileNotFoundException e) {
+			System.out.println("Failed to create file");
+			e.printStackTrace();
+		}
+		
+	}
+	
+	private static void readAccessScanner(Scanner input_scanner){
+		
+		// first line only has 
+		if (input_scanner.hasNextLine())
+			input_scanner.nextLine();
+		while(input_scanner.hasNextLine()){
+			String line=input_scanner.nextLine();
+			String[] words=line.split(", ");
+			String command=words[0];
+			int block_num=Integer.parseInt(words[1]);
+			if (words.length==3 && command.equals("W")){
+				write(block_num, words[2]);
+			}
+			else{
+				read(block_num);
+			}
+		}
+	}
+	
+	private static void write(int block_num, String data){	
+		String file_name=String.valueOf(block_num)+".txt";
+		PrintWriter writer;
+		try {
+			writer = new PrintWriter("input_file/"+file_name);
+			System.out.println("WRITING block_num: "+block_num+" data: "+data);
+			writer.println(data);
+			writer.close();
+		} catch (FileNotFoundException e) {
+			System.out.println("Couldn't write");
+			e.printStackTrace();
+		}
+	}
+	
+	private static void read(int block_num){
+		String file_name=get_file_name(block_num);
+		if (file_name.isEmpty()){
+			System.out.println("This block does not exist");
+			return;
+		}
+			
+		File read_file = new File(file_name);
+		try{
+			Scanner read_scanner=new Scanner(read_file);
+			String data_read="";
+			while(read_scanner.hasNextLine()){
+				data_read+=read_scanner.nextLine();
+				System.out.println(data_read);
+				}
+			read_scanner.close();
+			System.out.println("READ block_num: "+block_num+" with data: "+data_read);
+			}
+			catch(FileNotFoundException file_excep){
+				System.out.println("File name: "+ file_name+" not found for reading");
+			}
+	}
+
+	private static String get_file_name(int block_num) {
+		String file_name="";
+		if(block_num<12){
+			File read_file = new File("input_file/test_file.txt");
+			try {
+				int line=0;
+				Scanner read_scanner=new Scanner(read_file);
+				while(read_scanner.hasNextLine() && line<=block_num){
+					if(line==block_num){
+						file_name=read_scanner.nextLine();
+					}
+					else{
+						read_scanner.nextLine();
+					}
+					line++;
+				}
+			} catch (FileNotFoundException e) {
+				e.printStackTrace();
+			}
+		}
+		else if (block_num<112){
+			File read_file = new File("input_file/"+getSingleIndirectName());
+			try {
+				int line=12;
+				Scanner read_scanner=new Scanner(read_file);
+				while(read_scanner.hasNextLine() && line<=block_num){
+					if(line==block_num){
+						file_name=read_scanner.nextLine();
+					}
+					else{
+						read_scanner.nextLine();
+					}
+					line++;
+				}
+			} catch (FileNotFoundException e) {
+				e.printStackTrace();
+			}
+			
+		}
+		else if(block_num<312){
+			
+		}
+		return file_name;
+	}
+
+	private static String getLineNum() {
+		String file_name="";
+		File read_file = new File("input_file/test_file.txt");
+		try {
+			int line=0;
+			Scanner read_scanner=new Scanner(read_file);
+			while(read_scanner.hasNextLine() && line<=12){
+				if(line==12){
+					file_name=read_scanner.nextLine();
+				}
+				else{
+					read_scanner.nextLine();
+				}
+				line++;
+			}
+		} catch (FileNotFoundException e) {
+			e.printStackTrace();
+		}
+		return file_name;
+	}
+
+}
